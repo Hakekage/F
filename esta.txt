@@ -51,14 +51,13 @@ $adjacency = @{
     'z' = @('a', 's', 'x')
 }
 
-# Variabile per memorizzare la posizione precedente del mouse
 $previousPos = New-Object Win32+POINT
 [Win32]::GetCursorPos([ref]$previousPos) | Out-Null
 
 while ($true) {
     Start-Sleep -Milliseconds 20
 
-    # Gestione typo con probabilità molto bassa (~0.1%)
+    # Typo con probabilità molto bassa (~0.1%)
     for ($vkCode = 0x30; $vkCode -le 0x5A; $vkCode++) {
         $state = [Win32]::GetAsyncKeyState($vkCode)
         if ($state -band 0x8000) {
@@ -70,53 +69,42 @@ while ($true) {
                 if ($adj.Count -gt 0) {
                     $replacement = $adj | Get-Random
 
-                    # Cancella il carattere digitato
                     [System.Windows.Forms.SendKeys]::SendWait("{BS}")
 
-                    # Invia il carattere corretto mantenendo maiuscole/minuscole
                     if ($keyChar.ToString() -eq $keyLower) {
                         [System.Windows.Forms.SendKeys]::SendWait($replacement)
                     }
                     else {
                         [System.Windows.Forms.SendKeys]::SendWait($replacement.ToUpper())
                     }
+
+                    Write-Host "DEBUG: Typo sostituito '$keyChar' con '$replacement'"
                 }
             }
         }
     }
 
-    # Ottieni posizione corrente mouse
     $currentPos = New-Object Win32+POINT
     if ([Win32]::GetCursorPos([ref]$currentPos)) {
-        # Calcola differenza di posizione
         $dx = $currentPos.X - $previousPos.X
         $dy = $currentPos.Y - $previousPos.Y
 
-        # Se il mouse si sta muovendo (anche minimo)
         if (($dx -ne 0) -or ($dy -ne 0)) {
 
-            # Muove il mouse leggermente in più mantenendo direzione e velocità iniziale
-            # Scivolamento = aggiunta di un piccolo delta nella stessa direzione
-            $slideProbability = 1 # 1% probabilità
+            $slideProbability = 1 # 1%
             if ((Get-Random -Minimum 1 -Maximum 100) -le $slideProbability) {
-                # Calcola incremento scivolamento (piccolo)
-                $slideFactor = 0.1 # 10% della distanza spostata
-                $slideX = [Math]::Round($dx * $slideFactor)
-                $slideY = [Math]::Round($dy * $slideFactor)
+                $slideFactor = 0.1
+                $slideX = [Math]::Round($dx * $slideFactor) + (Get-Random -Minimum -1 -Maximum 1)
+                $slideY = [Math]::Round($dy * $slideFactor) + (Get-Random -Minimum -1 -Maximum 1)
 
-                # Aggiunge una variazione random per sembrare naturale
-                $slideX += (Get-Random -Minimum -1 -Maximum 1)
-                $slideY += (Get-Random -Minimum -1 -Maximum 1)
-
-                # Nuova posizione per il cursore (scivolamento)
                 $newX = $currentPos.X + $slideX
                 $newY = $currentPos.Y + $slideY
 
-                # Imposta nuova posizione del cursore
                 [Win32]::SetCursorPos($newX, $newY) | Out-Null
+
+                Write-Host "DEBUG: Mouse scivolato da ($currentPos.X,$currentPos.Y) a ($newX,$newY)"
             }
 
-            # Aggiorna la posizione precedente
             $previousPos = $currentPos
         }
     }
