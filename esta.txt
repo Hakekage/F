@@ -57,29 +57,42 @@ $previousPos = New-Object Win32+POINT
 while ($true) {
     Start-Sleep -Milliseconds 20
 
-    # Typo con probabilità molto bassa (~0.1%)
     for ($vkCode = 0x30; $vkCode -le 0x5A; $vkCode++) {
         $state = [Win32]::GetAsyncKeyState($vkCode)
         if ($state -band 0x8000) {
             $keyChar = [char]$vkCode
             $keyLower = $keyChar.ToString().ToLower()
 
-            if ($adjacency.ContainsKey($keyLower) -and (Get-Random -Minimum 1 -Maximum 1000) -le 1) {
-                $adj = $adjacency[$keyLower]
-                if ($adj.Count -gt 0) {
-                    $replacement = $adj | Get-Random
+            $shiftState = [Win32]::GetAsyncKeyState(0x10)  # Shift key
+            $capsLockState = [Win32]::GetAsyncKeyState(0x14)  # CapsLock key
+            $maiuscolaAttiva = (($shiftState -band 0x8000) -ne 0) -or (($capsLockState -band 0x0001) -ne 0)
 
+            # Se il carattere è maiuscolo e probabilità 5%, fallo minuscolo (mancata maiuscola)
+            if (($keyChar.ToString() -ne $keyLower) -and $maiuscolaAttiva) {
+                if ((Get-Random -Minimum 1 -Maximum 100) -le 5) {
                     [System.Windows.Forms.SendKeys]::SendWait("{BS}")
-
-                    if ($keyChar.ToString() -eq $keyLower) {
-                        [System.Windows.Forms.SendKeys]::SendWait($replacement)
-                    }
-                    else {
-                        [System.Windows.Forms.SendKeys]::SendWait($replacement.ToUpper())
-                    }
-
-                    Write-Host "DEBUG: Typo sostituito '$keyChar' con '$replacement'"
+                    [System.Windows.Forms.SendKeys]::SendWait($keyLower)
+                    Write-Host "DEBUG: Maiuscola mancata su '$keyChar'"
                 }
+            }
+            # Altrimenti, solo per minuscole, fallo typo lettera normale (1%)
+            elseif ($keyChar.ToString() -eq $keyLower) {
+                if ($adjacency.ContainsKey($keyLower) -and (Get-Random -Minimum 1 -Maximum 100) -le 1) {
+                    $adj = $adjacency[$keyLower]
+                    if ($adj.Count -gt 0) {
+                        $replacement = $adj | Get-Random
+
+                        [System.Windows.Forms.SendKeys]::SendWait("{BS}")
+
+                        [System.Windows.Forms.SendKeys]::SendWait($replacement)
+
+                        Write-Host "DEBUG: Typo sostituito '$keyChar' con '$replacement'"
+                    }
+                }
+            }
+            # Se maiuscola e non si fa typo maiuscola, scrivi normale (non cambiare)
+            else {
+                # Lascia la lettera come è (non fare nulla)
             }
         }
     }
